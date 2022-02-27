@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	deliveryChan := make(chan kafka.Event)
+
 	producer := NewKafkaProducer()
 
 	err := Publish(
@@ -15,15 +17,22 @@ func main() {
 		"teste",
 		nil,
 		producer,
+		deliveryChan,
 	)
-
-	producer.Flush(1000)
 
 	if err != nil {
 		log.Fatalf("cannot publish message: %v", err)
 	}
 
-	fmt.Println("message published")
+	e := <-deliveryChan
+
+	msg := e.(*kafka.Message)
+
+	if msg.TopicPartition.Error != nil {
+		log.Fatalf("cannot publish message: %v", msg.TopicPartition.Error)
+	}
+
+	fmt.Println("message published: " + msg.TopicPartition.String())
 }
 
 func NewKafkaProducer() *kafka.Producer {
@@ -38,7 +47,7 @@ func NewKafkaProducer() *kafka.Producer {
 	return p
 }
 
-func Publish(value, topic string, key []byte, producer *kafka.Producer) error {
+func Publish(value, topic string, key []byte, producer *kafka.Producer, deliveryChan chan kafka.Event) error {
 	msg := &kafka.Message{
 		Value: []byte(value),
 		Key:   key,
@@ -48,7 +57,7 @@ func Publish(value, topic string, key []byte, producer *kafka.Producer) error {
 		},
 	}
 
-	err := producer.Produce(msg, nil)
+	err := producer.Produce(msg, deliveryChan)
 
 	return err
 }
