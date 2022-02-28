@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 
@@ -8,31 +9,18 @@ import (
 )
 
 func main() {
-	deliveryChan := make(chan kafka.Event)
+	var asyncF bool
 
-	producer := NewKafkaProducer()
+	flag.BoolVar(&asyncF, "async", false, "make mod async")
 
-	err := Publish(
-		"msg-01",
-		"teste",
-		nil,
-		producer,
-		deliveryChan,
-	)
+	flag.Parse()
 
-	if err != nil {
-		log.Fatalf("cannot publish message: %v", err)
+	if asyncF {
+		Async()
+	} else {
+		Sync()
 	}
 
-	e := <-deliveryChan
-
-	msg := e.(*kafka.Message)
-
-	if msg.TopicPartition.Error != nil {
-		log.Fatalf("cannot publish message: %v", msg.TopicPartition.Error)
-	}
-
-	fmt.Println("message published: " + msg.TopicPartition.String())
 }
 
 func NewKafkaProducer() *kafka.Producer {
@@ -60,4 +48,67 @@ func Publish(value, topic string, key []byte, producer *kafka.Producer, delivery
 	err := producer.Produce(msg, deliveryChan)
 
 	return err
+}
+
+func Sync() {
+	deliveryChan := make(chan kafka.Event)
+
+	producer := NewKafkaProducer()
+
+	err := Publish(
+		"msg-01",
+		"teste",
+		nil,
+		producer,
+		deliveryChan,
+	)
+
+	if err != nil {
+		log.Fatalf("cannot publish message: %v", err)
+	}
+
+	e := <-deliveryChan
+
+	msg := e.(*kafka.Message)
+
+	if msg.TopicPartition.Error != nil {
+		log.Fatalf("cannot publish message: %v", msg.TopicPartition.Error)
+	}
+
+	fmt.Println("message published: " + msg.TopicPartition.String())
+}
+
+func Async() {
+	deliveryChan := make(chan kafka.Event)
+
+	producer := NewKafkaProducer()
+
+	err := Publish(
+		"msg-01",
+		"teste",
+		nil,
+		producer,
+		deliveryChan,
+	)
+
+	if err != nil {
+		log.Fatalf("cannot publish message: %v", err)
+	}
+
+	go DeliveryReport(deliveryChan)
+
+	producer.Flush(2000)
+}
+
+func DeliveryReport(deliveryChan chan kafka.Event) {
+	for e := range deliveryChan {
+		switch ev := e.(type) {
+		case *kafka.Message:
+			if ev.TopicPartition.Error != nil {
+				log.Fatalf("cannot publish message: %v", ev.TopicPartition.Error)
+			}
+
+			fmt.Println("message published: " + ev.TopicPartition.String())
+		}
+	}
 }
