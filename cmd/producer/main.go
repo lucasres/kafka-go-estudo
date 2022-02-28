@@ -25,7 +25,10 @@ func main() {
 
 func NewKafkaProducer() *kafka.Producer {
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": "kafka-estudo_kafka_1:9092",
+		"bootstrap.servers":   "kafka-estudo_kafka_1:9092",
+		"delivery.timeout.ms": "30000",
+		"acks":                "1",
+		"enable.idempotence":  "false",
 	})
 
 	if err != nil {
@@ -35,10 +38,16 @@ func NewKafkaProducer() *kafka.Producer {
 	return p
 }
 
-func Publish(value, topic string, key []byte, producer *kafka.Producer, deliveryChan chan kafka.Event) error {
+func Publish(value, topic, key string, producer *kafka.Producer, deliveryChan chan kafka.Event) error {
+	var bKey []byte
+
+	if key != "" {
+		bKey = []byte(key)
+	}
+
 	msg := &kafka.Message{
 		Value: []byte(value),
-		Key:   key,
+		Key:   bKey,
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &topic,
 			Partition: kafka.PartitionAny,
@@ -58,7 +67,7 @@ func Sync() {
 	err := Publish(
 		"msg-01",
 		"teste",
-		nil,
+		"key",
 		producer,
 		deliveryChan,
 	)
@@ -86,7 +95,7 @@ func Async() {
 	err := Publish(
 		"msg-01",
 		"teste",
-		nil,
+		"key",
 		producer,
 		deliveryChan,
 	)
